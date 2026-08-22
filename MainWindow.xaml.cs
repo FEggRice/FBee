@@ -68,10 +68,10 @@ public partial class MainWindow : Window
             var animationName = next switch
             {
                 PetState.Drag => "drag",
-                PetState.Sleep => "idle",
+                PetState.Sleep => "sleep",
                 _ => "idle"
             };
-            animation.Play(animationName, repeat: true, fps: 10);
+            animation.Play(animationName, repeat: true, fps: next == PetState.Sleep ? 8 : 12);
         }
         if (next == PetState.Idle) idleSince = DateTime.UtcNow;
     }
@@ -87,7 +87,7 @@ public partial class MainWindow : Window
 
         runDirection = Left + Width / 2 < bounds.Left + bounds.Width / 2 ? 1 : -1;
         runEndsAt = DateTime.UtcNow.AddSeconds(4);
-        SetRunAnimation();
+        animation.Play("run", repeat: true, fps: 12);
         SnapToTaskbarHeight();
         runTimer.Start();
     }
@@ -106,18 +106,8 @@ public partial class MainWindow : Window
         var minX = bounds.Left;
         var maxX = bounds.Right - Width;
         Left += runDirection * RunSpeed * runTimer.Interval.TotalSeconds;
-        if (Left <= minX)
-        {
-            Left = minX;
-            runDirection = 1;
-            SetRunAnimation();
-        }
-        else if (Left >= maxX)
-        {
-            Left = maxX;
-            runDirection = -1;
-            SetRunAnimation();
-        }
+        if (Left <= minX) { Left = minX; runDirection = 1; }
+        else if (Left >= maxX) { Left = maxX; runDirection = -1; }
         SnapToTaskbarHeight();
 
         if (DateTime.UtcNow >= runEndsAt)
@@ -126,8 +116,6 @@ public partial class MainWindow : Window
             SnapToTaskbar();
         }
     }
-
-    private void SetRunAnimation() => animation.Play(runDirection < 0 ? "walk-left" : "walk-right", repeat: true, fps: 12);
 
     private void SnapToTaskbarHeight()
     {

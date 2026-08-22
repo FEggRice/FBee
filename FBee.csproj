@@ -9,8 +9,8 @@
   </PropertyGroup>
   <ItemGroup>
     <Content Include="idle\*.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="run\*.png" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="drag\*.png" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="walk-left\*.png" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="walk-right\*.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="sleep\*.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
