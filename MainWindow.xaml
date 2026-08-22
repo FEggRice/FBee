@@ -6,12 +6,12 @@
         mc:Ignorable="d"
         Title="FBee" Width="256" Height="256"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
-        ShowInTaskbar="False" Topmost="True" ResizeMode="NoResize"
+        ShowInTaskbar="True" Topmost="True" ResizeMode="NoResize"
         MouseLeftButtonDown="OnMouseLeftButtonDown" MouseLeftButtonUp="OnMouseLeftButtonUp" MouseMove="OnMouseMove">
     <Grid Background="Transparent">
         <Ellipse Width="170" Height="34" Fill="#33000000" VerticalAlignment="Bottom" Margin="0,0,0,8" />
         <Image x:Name="PetImage" Stretch="Uniform" Width="230" Height="230" HorizontalAlignment="Center" VerticalAlignment="Center" />
-        <StackPanel VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,18">
+        <StackPanel Visibility="Collapsed" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,18">
             <TextBlock x:Name="StateText" Text="idle" FontSize="12" HorizontalAlignment="Center" Foreground="White" />
             <ProgressBar x:Name="EnergyBar" Width="100" Height="6" Minimum="0" Maximum="100" />
         </StackPanel>
