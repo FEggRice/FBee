@@ -10,201 +10,67 @@ public partial class MainWindow : Window
 {
     private readonly EnergyService energy = new();
     private readonly TaskbarService taskbar = new();
+    private readonly PetStateMachine states = new();
+    private readonly PetPhysicsService physics;
     private readonly AnimationPlayer animation;
-    private readonly DispatcherTimer stateTimer = new() { Interval = TimeSpan.FromSeconds(1) };
-    private readonly DispatcherTimer runTimer = new() { Interval = TimeSpan.FromMilliseconds(16) };
-    private readonly DispatcherTimer physicsTimer = new() { Interval = TimeSpan.FromMilliseconds(16) };
-    private const double RunSpeed = 180;
-    private const double Gravity = 1400;
-    private const double DragTimeoutSeconds = 3;
-    private const double EscapeDurationSeconds = 0.45;
-    private PetState state = PetState.Idle;
+    private readonly DispatcherTimer dailyTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     private DateTime idleSince = DateTime.UtcNow;
-    private DateTime dragStartedAt;
-    private DateTime escapeEndsAt;
-    private DateTime runEndsAt;
-    private int runDirection = 1;
-    private double fallVelocity;
-    private bool dragging;
-    private Point dragOffset;
 
     public MainWindow()
     {
         InitializeComponent();
         animation = new AnimationPlayer(PetImage);
-        Loaded += (_, _) => { SnapToTaskbar(); SetState(PetState.Idle); };
+        physics = new PetPhysicsService(this, taskbar, states);
+        states.Changed += (_, next) => ApplyStateVisual(next);
+        Loaded += (_, _) => { physics.SnapToTaskbar(); ApplyStateVisual(PetState.Idle); };
         energy.Changed += value => Dispatcher.Invoke(() => EnergyBar.Value = value);
-        stateTimer.Tick += (_, _) => UpdateDailyBehavior();
-        runTimer.Tick += (_, _) => UpdateRunMovement();
-        physicsTimer.Tick += (_, _) => UpdatePhysics();
-        stateTimer.Start();
-    }
-
-    private void SnapToTaskbar()
-    {
-        var p = taskbar.GetDefaultPetPosition(Width, Height);
-        Left = p.X;
-        Top = p.Y;
+        dailyTimer.Tick += (_, _) => UpdateDailyBehavior();
+        dailyTimer.Start();
     }
 
     private void UpdateDailyBehavior()
     {
-        var sleeping = state == PetState.Sleep;
+        var sleeping = states.Current == PetState.Sleep;
         energy.Tick(sleeping);
-        if (state is PetState.Drag or PetState.Fall or PetState.Escape) return;
-        if (!sleeping && energy.Value <= energy.SleepThreshold) { SetState(PetState.Sleep); return; }
+        if (states.Current is PetState.Drag or PetState.Fall or PetState.Escape or PetState.Run) return;
+        if (!sleeping && energy.Value <= energy.SleepThreshold) { states.Set(PetState.Sleep); return; }
         if (sleeping)
         {
-            if (energy.Value >= energy.WakeThreshold) { energy.Wake(); SetState(PetState.Idle); }
+            if (energy.Value >= energy.WakeThreshold) { energy.Wake(); states.Set(PetState.Idle); }
             return;
         }
-        if (state == PetState.Idle && energy.Value >= 70 && DateTime.UtcNow - idleSince > TimeSpan.FromSeconds(45))
-            SetState(PetState.Run);
+        if (states.Current == PetState.Idle && energy.Value >= 70 && DateTime.UtcNow - idleSince > TimeSpan.FromSeconds(45))
+            physics.StartRun();
     }
 
-    private void SetState(PetState next)
+    private void ApplyStateVisual(PetState next)
     {
-        if (state == PetState.Run && next != PetState.Run) runTimer.Stop();
-        if (next is not (PetState.Drag or PetState.Escape or PetState.Fall)) physicsTimer.Stop();
-        state = next;
         StateText.Text = next.ToString().ToLowerInvariant();
-        if (next == PetState.Run)
+        var animationName = next switch
         {
-            BeginRun();
-        }
-        else
-        {
-            var animationName = next switch
-            {
-                PetState.Drag or PetState.Escape or PetState.Fall => "drag",
-                PetState.Sleep => "sleep",
-                _ => "idle"
-            };
-            animation.Play(animationName, repeat: true, fps: next == PetState.Sleep ? 8 : 12);
-        }
+            PetState.Run => "run",
+            PetState.Drag or PetState.Escape or PetState.Fall => "drag",
+            PetState.Sleep => "sleep",
+            _ => "idle"
+        };
+        animation.Play(animationName, repeat: true, fps: next == PetState.Sleep ? 8 : 12);
         if (next == PetState.Idle) idleSince = DateTime.UtcNow;
-    }
-
-    private void BeginRun()
-    {
-        var bounds = taskbar.GetTaskbarBounds();
-        if (!taskbar.IsBottomTaskbarVisible || bounds.Width <= Width)
-        {
-            SetState(PetState.Idle);
-            return;
-        }
-        runDirection = Left + Width / 2 < bounds.Left + bounds.Width / 2 ? 1 : -1;
-        runEndsAt = DateTime.UtcNow.AddSeconds(4);
-        animation.Play("run", repeat: true, fps: 12);
-        SnapToTaskbarHeight();
-        runTimer.Start();
-    }
-
-    private void UpdateRunMovement()
-    {
-        if (state != PetState.Run) return;
-        var bounds = taskbar.GetTaskbarBounds();
-        if (!taskbar.IsBottomTaskbarVisible || bounds.Width <= Width)
-        {
-            SetState(PetState.Idle);
-            SnapToTaskbar();
-            return;
-        }
-        var minX = bounds.Left;
-        var maxX = bounds.Right - Width;
-        Left += runDirection * RunSpeed * runTimer.Interval.TotalSeconds;
-        if (Left <= minX) { Left = minX; runDirection = 1; }
-        else if (Left >= maxX) { Left = maxX; runDirection = -1; }
-        SnapToTaskbarHeight();
-        if (DateTime.UtcNow >= runEndsAt)
-        {
-            SetState(PetState.Idle);
-            SnapToTaskbar();
-        }
-    }
-
-    private void UpdatePhysics()
-    {
-        if (dragging && DateTime.UtcNow - dragStartedAt >= TimeSpan.FromSeconds(DragTimeoutSeconds))
-        {
-            TriggerEscape();
-            return;
-        }
-        if (state == PetState.Escape)
-        {
-            if (DateTime.UtcNow >= escapeEndsAt) BeginFall();
-            return;
-        }
-        if (state != PetState.Fall) return;
-        var dt = physicsTimer.Interval.TotalSeconds;
-        fallVelocity += Gravity * dt;
-        Top += fallVelocity * dt;
-        var floor = GetFloorTop();
-        if (Top >= floor)
-        {
-            Top = floor;
-            fallVelocity = 0;
-            SetState(PetState.Idle);
-            if (taskbar.IsBottomTaskbarVisible) SnapToTaskbar();
-        }
-    }
-
-    private void TriggerEscape()
-    {
-        dragging = false;
-        ReleaseMouseCapture();
-        SetState(PetState.Escape);
-        escapeEndsAt = DateTime.UtcNow.AddSeconds(EscapeDurationSeconds);
-        physicsTimer.Start();
-    }
-
-    private void BeginFall()
-    {
-        fallVelocity = 0;
-        SetState(PetState.Fall);
-        physicsTimer.Start();
-    }
-
-    private double GetFloorTop()
-    {
-        var taskbarBounds = taskbar.GetTaskbarBounds();
-        var floor = taskbar.IsBottomTaskbarVisible ? taskbarBounds.Top - Height + 8 : SystemParameters.WorkArea.Bottom - Height;
-        return Math.Max(SystemParameters.WorkArea.Top, floor);
-    }
-
-    private void SnapToTaskbarHeight()
-    {
-        var bounds = taskbar.GetTaskbarBounds();
-        if (bounds.Height > 0) Top = bounds.Top - Height + 8;
     }
 
     private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (state is PetState.Fall or PetState.Escape) return;
-        var woke = energy.RegisterClick(state == PetState.Sleep);
-        if (state == PetState.Sleep && !woke) return;
+        if (states.Current is PetState.Fall or PetState.Escape) return;
+        var woke = energy.RegisterClick(states.Current == PetState.Sleep);
+        if (states.Current == PetState.Sleep && !woke) return;
         if (woke) energy.Wake();
-        SetState(PetState.Drag);
-        dragging = true;
-        dragStartedAt = DateTime.UtcNow;
-        dragOffset = e.GetPosition(this);
+        physics.StartDrag(e.GetPosition(this));
         CaptureMouse();
-        physicsTimer.Start();
     }
 
     private void OnMouseMove(object sender, MouseEventArgs e)
     {
-        if (!dragging || e.LeftButton != MouseButtonState.Pressed) return;
-        var p = e.GetPosition(this);
-        Left += p.X - dragOffset.X;
-        Top += p.Y - dragOffset.Y;
+        if (e.LeftButton == MouseButtonState.Pressed) physics.UpdateDrag(e.GetPosition(this));
     }
 
-    private void OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
-    {
-        if (!dragging) return;
-        dragging = false;
-        ReleaseMouseCapture();
-        BeginFall();
-    }
+    private void OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e) => physics.EndDrag();
 }
