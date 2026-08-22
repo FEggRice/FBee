@@ -22,6 +22,11 @@ public partial class MainWindow : Window
         animation = new AnimationPlayer(PetImage);
         physics = new PetPhysicsService(this, taskbar, states);
         states.Changed += (_, next) => ApplyStateVisual(next);
+        physics.RunDirectionChanged += direction =>
+        {
+            // The supplied run frames face right; mirror them while moving left.
+            if (states.Current == PetState.Run) animation.SetFlip(direction < 0);
+        };
         Loaded += (_, _) => { physics.SnapToTaskbar(); ApplyStateVisual(PetState.Idle); };
         energy.Changed += value => Dispatcher.Invoke(() => EnergyBar.Value = value);
         dailyTimer.Tick += (_, _) => UpdateDailyBehavior();
@@ -39,7 +44,7 @@ public partial class MainWindow : Window
             if (energy.Value >= energy.WakeThreshold) { energy.Wake(); states.Set(PetState.Idle); }
             return;
         }
-        if (states.Current == PetState.Idle && energy.Value >= 70 && DateTime.UtcNow - idleSince > TimeSpan.FromSeconds(45))
+        if (states.Current == PetState.Idle && energy.Value >= 70 && DateTime.UtcNow - idleSince > TimeSpan.FromSeconds(10))
             physics.StartRun();
     }
 
@@ -53,6 +58,7 @@ public partial class MainWindow : Window
             PetState.Sleep => "sleep",
             _ => "idle"
         };
+        animation.SetFlip(next == PetState.Run && physics.RunDirection < 0);
         animation.Play(animationName, repeat: true, fps: next == PetState.Sleep ? 8 : 12);
         if (next == PetState.Idle) idleSince = DateTime.UtcNow;
     }

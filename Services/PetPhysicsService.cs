@@ -23,6 +23,8 @@ public sealed class PetPhysicsService
     private int runDirection = 1;
 
     public bool IsDragging { get; private set; }
+    public int RunDirection => runDirection;
+    public event Action<int>? RunDirectionChanged;
 
     public PetPhysicsService(Window window, TaskbarService taskbar, PetStateMachine states)
     {
@@ -63,7 +65,7 @@ public sealed class PetPhysicsService
         if (states.Current != PetState.Idle || !taskbar.IsBottomTaskbarVisible) return;
         var bounds = taskbar.GetTaskbarBounds();
         if (bounds.Width <= window.Width) return;
-        runDirection = window.Left + window.Width / 2 < bounds.Left + bounds.Width / 2 ? 1 : -1;
+        SetRunDirection(window.Left + window.Width / 2 < bounds.Left + bounds.Width / 2 ? 1 : -1);
         runEndsAt = DateTime.UtcNow.AddSeconds(4);
         states.Set(PetState.Run);
         SnapToTaskbarHeight();
@@ -134,8 +136,16 @@ public sealed class PetPhysicsService
         var minX = bounds.Left;
         var maxX = bounds.Right - window.Width;
         window.Left += runDirection * RunSpeed * timer.Interval.TotalSeconds;
-        if (window.Left <= minX) { window.Left = minX; runDirection = 1; }
-        else if (window.Left >= maxX) { window.Left = maxX; runDirection = -1; }
+        if (window.Left <= minX)
+        {
+            window.Left = minX;
+            SetRunDirection(1);
+        }
+        else if (window.Left >= maxX)
+        {
+            window.Left = maxX;
+            SetRunDirection(-1);
+        }
         SnapToTaskbarHeight();
         if (DateTime.UtcNow >= runEndsAt)
         {
@@ -147,6 +157,17 @@ public sealed class PetPhysicsService
     private void StopRun()
     {
         if (states.Current == PetState.Run) states.Set(PetState.Idle);
+    }
+
+    private void SetRunDirection(int direction)
+    {
+        if (runDirection == direction)
+        {
+            RunDirectionChanged?.Invoke(runDirection);
+            return;
+        }
+        runDirection = direction;
+        RunDirectionChanged?.Invoke(runDirection);
     }
 
     private void SnapToTaskbarHeight()

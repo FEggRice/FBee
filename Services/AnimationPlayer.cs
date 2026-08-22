@@ -1,5 +1,7 @@
 using System.IO;
+using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 
@@ -13,6 +15,8 @@ public sealed class AnimationPlayer
     private string[] frames = [];
     private int index;
     private bool loop;
+
+    public bool IsFlipped { get; private set; }
 
     public AnimationPlayer(Image target)
     {
@@ -37,6 +41,13 @@ public sealed class AnimationPlayer
     }
 
     public void Stop() => timer.Stop();
+
+    public void SetFlip(bool flipped)
+    {
+        IsFlipped = flipped;
+        target.RenderTransformOrigin = new Point(0.5, 0.5);
+        target.RenderTransform = new ScaleTransform(flipped ? -1 : 1, 1);
+    }
 
     private void Advance()
     {
