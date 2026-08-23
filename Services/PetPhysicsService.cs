@@ -121,7 +121,8 @@ public sealed class PetPhysicsService
         window.Top = floor;
         fallVelocity = 0;
         states.Set(PetState.Idle);
-        if (taskbar.IsBottomTaskbarVisible) SnapToTaskbar();
+        // Keep the horizontal position where the pet was released. Only the
+        // vertical coordinate is clamped to the real taskbar/screen floor.
     }
 
     private void UpdateRun()
@@ -130,7 +131,6 @@ public sealed class PetPhysicsService
         if (!taskbar.IsBottomTaskbarVisible || bounds.Width <= window.Width)
         {
             states.Set(PetState.Idle);
-            SnapToTaskbar();
             return;
         }
         var minX = bounds.Left;
@@ -150,7 +150,7 @@ public sealed class PetPhysicsService
         if (DateTime.UtcNow >= runEndsAt)
         {
             states.Set(PetState.Idle);
-            SnapToTaskbar();
+            // Do not snap to the startup position when a run ends.
         }
     }
 
