@@ -13,8 +13,11 @@ public partial class MainWindow : Window
     private readonly PetStateMachine states = new();
     private readonly PetPhysicsService physics;
     private readonly AnimationPlayer animation;
+    private readonly AudioPlayerService audio = new();
     private readonly DispatcherTimer dailyTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     private DateTime idleSince = DateTime.UtcNow;
+    private Point pressPosition;
+    private bool dragVoicePlayed;
 
     public MainWindow()
     {
@@ -31,6 +34,7 @@ public partial class MainWindow : Window
         energy.Changed += value => Dispatcher.Invoke(() => EnergyBar.Value = value);
         dailyTimer.Tick += (_, _) => UpdateDailyBehavior();
         dailyTimer.Start();
+        Closed += (_, _) => audio.Dispose();
     }
 
     private void UpdateDailyBehavior()
@@ -69,14 +73,27 @@ public partial class MainWindow : Window
         var woke = energy.RegisterClick(states.Current == PetState.Sleep);
         if (states.Current == PetState.Sleep && !woke) return;
         if (woke) energy.Wake();
-        physics.StartDrag(e.GetPosition(this));
+        pressPosition = e.GetPosition(this);
+        dragVoicePlayed = false;
+        physics.StartDrag(pressPosition);
         CaptureMouse();
     }
 
     private void OnMouseMove(object sender, MouseEventArgs e)
     {
-        if (e.LeftButton == MouseButtonState.Pressed) physics.UpdateDrag(e.GetPosition(this));
+        if (e.LeftButton != MouseButtonState.Pressed) return;
+        var position = e.GetPosition(this);
+        if (!dragVoicePlayed && (position - pressPosition).Length >= 8)
+        {
+            audio.PlayDragVoice();
+            dragVoicePlayed = true;
+        }
+        physics.UpdateDrag(position);
     }
 
-    private void OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e) => physics.EndDrag();
+    private void OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        physics.EndDrag();
+        if (!dragVoicePlayed) audio.PlayRandomVoice();
+    }
 }

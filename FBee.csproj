@@ -12,5 +12,7 @@
     <Content Include="run\*.png" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="drag\*.png" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="sleep\*.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\audio\**\*.mp3" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\audio\**\*.wav" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
