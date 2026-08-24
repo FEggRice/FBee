@@ -16,7 +16,8 @@ public sealed class AudioPlayerService : IDisposable
     private bool disposed;
 
     public int MaxSimultaneous { get; set; } = DefaultMaxSimultaneous;
-    public double Volume { get; set; } = 1.0;
+    // Keep voices slightly below full volume until a user setting is added.
+    public double Volume { get; set; } = 0.65;
 
     public void PlayRandomVoice()
     {
